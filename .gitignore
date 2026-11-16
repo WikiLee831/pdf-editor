@@ -1,0 +1,6 @@
+node_modules
+dist
+public/pdfjs
+public/tesseract
+public/tessdata
+public/fonts
