@@ -8,7 +8,7 @@
 
 | 方式 | 指令 |
 | --- | --- |
-| 一鍵啟動（Windows） | 雙擊 `啟動 PDF Editor.bat`（第一次會自動安裝與建置） |
+| 一鍵啟動（Windows） | 雙擊 `Start_PDF_Editor.bat`（第一次會自動安裝與建置） |
 | 正式版 | `npm install` → `npm run build` → `npm start`（開啟 http://localhost:4173） |
 | 開發模式 | `npm install` → `npm run dev`（開啟 http://localhost:5173） |
 
