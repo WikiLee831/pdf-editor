@@ -590,7 +590,7 @@ export async function pdfToDocx(bytes: Uint8Array, mode: DocxMode, onProgress?: 
     await pdf.destroy();
   }
   const doc = new Document({
-    creator: 'PDF Studio',
+    creator: 'PDF Editor',
     styles: { default: { document: { run: { font: 'Arial' }, paragraph: { spacing: { before: 0, after: 0 } } } } },
     sections,
   });

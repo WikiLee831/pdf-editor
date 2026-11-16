@@ -64,17 +64,17 @@ const server = http
 let tryPort = port;
 server.on('listening', () => {
   const url = `http://localhost:${tryPort}/`;
-  console.log(`PDF Studio 已啟動：${url}`);
+  console.log(`PDF Editor 已啟動：${url}`);
   console.log('使用期間請保持此視窗開啟；關閉視窗或按 Ctrl+C 即結束程式。');
   openBrowser(url);
 });
 server.on('error', async (err) => {
   if (err.code !== 'EADDRINUSE') throw err;
-  // 連接埠被占用：若是 PDF Studio 已在執行，直接開啟；否則改用下一個連接埠
+  // 連接埠被占用：若是 PDF Editor 已在執行，直接開啟；否則改用下一個連接埠
   try {
     const html = await (await fetch(`http://127.0.0.1:${tryPort}/`)).text();
-    if (html.includes('PDF Studio')) {
-      console.log(`PDF Studio 已經在 http://localhost:${tryPort}/ 執行中，直接開啟瀏覽器。`);
+    if (html.includes('PDF Editor')) {
+      console.log(`PDF Editor 已經在 http://localhost:${tryPort}/ 執行中，直接開啟瀏覽器。`);
       openBrowser(`http://localhost:${tryPort}/`);
       process.exit(0);
     }

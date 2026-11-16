@@ -352,7 +352,7 @@ export async function buildPdf({ pages, objects, ocr, title, onProgress }: Build
     onProgress?.((i + 1) / pages.length);
   }
   if (title) out.setTitle(title);
-  out.setProducer('PDF Studio');
+  out.setProducer('PDF Editor');
   out.setModificationDate(new Date());
   return out.save();
 }

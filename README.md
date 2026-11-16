@@ -1,4 +1,4 @@
-# PDF Studio
+# PDF Editor
 
 在瀏覽器中執行的 PDF 編輯器，功能參考 Adobe Acrobat。**免登入、免帳號、免 API 金鑰、不需任何認證**；所有處理（包含 OCR）都在本機完成，檔案不會上傳。
 
@@ -8,7 +8,7 @@
 
 | 方式 | 指令 |
 | --- | --- |
-| 一鍵啟動（Windows） | 雙擊 `啟動 PDF Studio.bat`（第一次會自動安裝與建置） |
+| 一鍵啟動（Windows） | 雙擊 `啟動 PDF Editor.bat`（第一次會自動安裝與建置） |
 | 正式版 | `npm install` → `npm run build` → `npm start`（開啟 http://localhost:4173） |
 | 開發模式 | `npm install` → `npm run dev`（開啟 http://localhost:5173） |
 

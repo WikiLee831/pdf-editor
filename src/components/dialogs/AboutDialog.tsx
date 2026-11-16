@@ -2,7 +2,7 @@ import Modal from './Modal';
 
 export default function AboutDialog() {
   return (
-    <Modal title="PDF Studio 使用說明">
+    <Modal title="PDF Editor 使用說明">
       <div className="hint" style={{ fontSize: 13, color: '#2c2c2c' }}>
         <p style={{ marginTop: 0 }}>
           <b>免登入、免認證、完全離線。</b>所有功能（含 OCR）都在瀏覽器本機執行，檔案不會上傳到任何伺服器。

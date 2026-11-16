@@ -108,7 +108,7 @@ export default function App() {
 
   useEffect(() => setPageInput(String(current + 1)), [current]);
   useEffect(() => {
-    document.title = docName ? `${dirty ? '● ' : ''}${docName} - PDF Studio` : 'PDF Studio';
+    document.title = docName ? `${dirty ? '● ' : ''}${docName} - PDF Editor` : 'PDF Editor';
   }, [docName, dirty]);
 
   // 快速鍵
@@ -239,7 +239,7 @@ export default function App() {
       <header className="topbar">
         <div className="brand">
           <div className="brand-logo">PDF</div>
-          PDF Studio
+          PDF Editor
         </div>
         <button className="btn" onClick={openFlow} title="開啟（Ctrl+O）">
           <FolderOpen size={17} /> 開啟

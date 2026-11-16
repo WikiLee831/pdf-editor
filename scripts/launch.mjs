@@ -1,4 +1,4 @@
-// 一鍵啟動：必要時安裝套件、建置，然後啟動本機伺服器（由「啟動 PDF Studio.bat」呼叫）
+// 一鍵啟動：必要時安裝套件、建置，然後啟動本機伺服器（由「啟動 PDF Editor.bat」呼叫）
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';

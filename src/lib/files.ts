@@ -74,7 +74,7 @@ export async function openFiles(files: File[]) {
 export function friendlyError(e: any): string {
   const msg = String(e?.message || e);
   if (/fetch|Failed to load|NetworkError|worker/i.test(msg)) {
-    return '無法連線到本機伺服器。請確認「啟動 PDF Studio」的黑色視窗仍在執行（關閉它會停止程式），然後重新整理此頁面。';
+    return '無法連線到本機伺服器。請確認「啟動 PDF Editor」的黑色視窗仍在執行（關閉它會停止程式），然後重新整理此頁面。';
   }
   return msg;
 }
