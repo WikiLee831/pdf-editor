@@ -281,6 +281,7 @@ const TOOL_TITLES: Record<string, string> = {
   ink: '手繪',
   whiteout: '白色塗改',
   eraser: '橡皮擦',
+  snapshot: '快照',
 };
 const TOOL_HINTS: Record<string, string> = {
   select: '點選物件可移動、縮放；雙擊文字物件可修改內容。在頁面空白處拖曳可選取並複製原始文字。',
@@ -296,4 +297,5 @@ const TOOL_HINTS: Record<string, string> = {
   ink: '按住拖曳自由繪製。',
   whiteout: '拖曳框選要遮蓋的內容（輸出時會覆蓋為白色）。',
   eraser: '點一下或拖曳經過即可刪除：新增的文字、圖片、圖形、螢光筆、簽名，以及 PDF 原有的圖片（虛線框標示）。手繪線條只會擦掉經過的部分。按 Ctrl+Z 可復原整次擦除。',
+  snapshot: '拖曳框選頁面上的區域，放開後會自動複製到剪貼簿（含編輯內容與註解），也可下載為 PNG，或在頁面上貼成可移動的圖片。按 Esc 取消選取。',
 };

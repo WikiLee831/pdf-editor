@@ -21,9 +21,11 @@ import {
   ZoomOut,
   TextCursorInput,
   Images,
+  Printer,
+  ClipboardPaste,
 } from 'lucide-react';
 import { useStore } from './store';
-import { openFiles, pickFiles, savePdf, setFileHandle } from './lib/files';
+import { openFiles, pasteImageBlob, pasteImageFromClipboard, pickFiles, savePdf, setFileHandle } from './lib/files';
 import { clearRasterCache, displaySize } from './lib/pdfjs';
 import Viewer from './components/Viewer';
 import ThumbPanel from './components/ThumbPanel';
@@ -38,6 +40,7 @@ import CreateDialog from './components/dialogs/CreateDialog';
 import SignatureDialog from './components/dialogs/SignatureDialog';
 import { PageNumberDialog, WatermarkDialog } from './components/dialogs/StampDialogs';
 import AboutDialog from './components/dialogs/AboutDialog';
+import PrintDialog from './components/dialogs/PrintDialog';
 
 async function openFlow() {
   const w = window as any;
@@ -128,6 +131,11 @@ export default function App() {
         savePdf(e.shiftKey);
         return;
       }
+      if (mod && e.key.toLowerCase() === 'p') {
+        e.preventDefault();
+        if (s.pages.length && !s.dialog) s.openDialog('print');
+        return;
+      }
       if (typing || s.dialog) return;
       if (mod && e.key.toLowerCase() === 'z') {
         e.preventDefault();
@@ -191,12 +199,16 @@ export default function App() {
   useEffect(() => {
     const onPaste = async (e: ClipboardEvent) => {
       const t = e.target as HTMLElement;
-      if (t.isContentEditable || ['INPUT', 'TEXTAREA'].includes(t.tagName)) return;
-      const file = Array.from(e.clipboardData?.files || []).find((f) => f.type.startsWith('image/'));
-      if (!file || !st().pages.length) return;
-      const { normalizeImage } = await import('./lib/files');
-      st().setPendingImage(await normalizeImage(file));
-      st().toast('在頁面上點一下以放置貼上的圖片');
+      if (t.isContentEditable || ['INPUT', 'TEXTAREA'].includes(t.tagName) || st().dialog) return;
+      const dt = e.clipboardData;
+      const file =
+        Array.from(dt?.files || []).find((f) => f.type.startsWith('image/')) ||
+        Array.from(dt?.items || [])
+          .find((i) => i.kind === 'file' && i.type.startsWith('image/'))
+          ?.getAsFile();
+      if (!file) return;
+      e.preventDefault();
+      await pasteImageBlob(file);
     };
     window.addEventListener('paste', onPaste);
     return () => window.removeEventListener('paste', onPaste);
@@ -249,6 +261,12 @@ export default function App() {
         </button>
         <button className="btn" onClick={() => savePdf(true)} disabled={!hasDoc} title="另存新檔（Ctrl+Shift+S）">
           另存新檔
+        </button>
+        <button className="btn" onClick={() => st().openDialog('print')} disabled={!hasDoc} title="列印（Ctrl+P）">
+          <Printer size={17} /> 列印
+        </button>
+        <button className="btn icon" onClick={pasteImageFromClipboard} title="從剪貼簿貼上圖片（Ctrl+V）">
+          <ClipboardPaste size={17} />
         </button>
         {hasDoc && (
           <>
@@ -366,6 +384,7 @@ export default function App() {
       {dialog === 'watermark' && <WatermarkDialog />}
       {dialog === 'pagenum' && <PageNumberDialog />}
       {dialog === 'about' && <AboutDialog />}
+      {dialog === 'print' && <PrintDialog />}
 
       {busy && (
         <div className="busy">
@@ -409,7 +428,7 @@ function Welcome({ over }: { over: boolean }) {
             PDF
           </div>
           <h1>將 PDF 或圖片拖放到這裡</h1>
-          <p>免登入、免安裝外掛，所有處理都在你的電腦上完成。</p>
+          <p>免登入、免安裝外掛，所有處理都在你的電腦上完成。也可以直接按 Ctrl+V 貼上剪貼簿中的圖片。</p>
           <button className="btn primary" style={{ height: 40, padding: '0 22px', fontSize: 14 }} onClick={openFlow}>
             <FolderOpen size={18} /> 選擇檔案
           </button>

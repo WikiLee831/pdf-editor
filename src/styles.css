@@ -926,3 +926,12 @@ textarea {
     display: none;
   }
 }
+
+/* 快照選取區 */
+.snap-box {
+  position: absolute;
+  border: 1.5px dashed var(--blue);
+  background: rgba(20, 115, 230, 0.08);
+  pointer-events: none;
+  z-index: 9;
+}

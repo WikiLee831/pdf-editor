@@ -20,6 +20,7 @@ export type DialogName =
   | 'watermark'
   | 'pagenum'
   | 'signature'
+  | 'print'
   | 'about';
 
 interface Busy {

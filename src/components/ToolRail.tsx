@@ -1,5 +1,7 @@
 import {
   ArrowUpRight,
+  Camera,
+  ClipboardPaste,
   Circle,
   Eraser,
   Hand,
@@ -16,7 +18,7 @@ import {
   TextCursorInput,
 } from 'lucide-react';
 import { useStore } from '../store';
-import { normalizeImage, pickFiles } from '../lib/files';
+import { normalizeImage, pasteImageFromClipboard, pickFiles } from '../lib/files';
 import type { Tool } from '../types';
 
 type Item = { tool?: Tool; icon: any; label: string; key?: string; action?: () => void } | 'sep';
@@ -41,6 +43,8 @@ export const TOOL_ITEMS: Item[] = [
   { tool: 'addText', icon: Type, label: '新增文字', key: 'T' },
   { tool: 'editImage', icon: Images, label: '編輯既有圖片（移動、取代、刪除、匯出）', key: 'I' },
   { icon: ImagePlus, label: '插入圖片', action: insertImageFlow },
+  { icon: ClipboardPaste, label: '從剪貼簿貼上圖片（Ctrl+V）', action: pasteImageFromClipboard },
+  { tool: 'snapshot', icon: Camera, label: '快照（框選區域，複製為圖片）', key: 'K' },
   'sep',
   { tool: 'highlight', icon: Highlighter, label: '螢光筆', key: 'L' },
   { tool: 'rect', icon: Square, label: '矩形', key: 'R' },

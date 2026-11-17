@@ -217,6 +217,57 @@ export async function imagesToPdf(files: Blob[], mode: 'fit' | 'a4' | 'letter', 
   return doc.save();
 }
 
+/** 把圖片直接放到目前頁面中央（依畫面方向），並選取以便移動/縮放 */
+export async function placeImageOnCurrentPage(file: Blob) {
+  const st = useStore.getState();
+  const ref = st.pages[st.currentPage];
+  if (!ref) return;
+  const img = await normalizeImage(file);
+  const R = ((((ref.baseRotate + ref.rotate) % 360) + 360) % 360) as number;
+  // 以 96 DPI 換算，最大不超過頁面（視覺方向）的 80%
+  const vw = R % 180 ? ref.height : ref.width;
+  const vh = R % 180 ? ref.width : ref.height;
+  let w = (img.w * 72) / 96;
+  let h = (img.h * 72) / 96;
+  const k = Math.min(1, (vw * 0.8) / w, (vh * 0.8) / h);
+  w *= k;
+  h *= k;
+  const id = uid();
+  st.addObject(ref.id, { id, type: 'image', x: ref.width / 2 - w / 2, y: ref.height / 2 - h / 2, w, h, src: img.src, rot: R ? -R : undefined });
+  st.set({ tool: 'select', pendingImage: null });
+  st.select({ pageId: ref.id, id });
+  st.toast(`已貼上圖片到第 ${st.currentPage + 1} 頁，可拖曳移動或拉角落縮放`, 'success');
+}
+
+/** 由剪貼簿讀取圖片（需使用者授權讀取剪貼簿） */
+export async function pasteImageFromClipboard() {
+  const st = useStore.getState();
+  const nav = navigator as any;
+  if (!nav.clipboard?.read) return st.toast('此瀏覽器不支援讀取剪貼簿，請直接按 Ctrl+V 貼上', 'error');
+  try {
+    const items: ClipboardItem[] = await nav.clipboard.read();
+    for (const it of items) {
+      const type = it.types.find((t) => t.startsWith('image/'));
+      if (type) return pasteImageBlob(await it.getType(type));
+    }
+    st.toast('剪貼簿中沒有圖片（可先用截圖工具或「快照」複製圖片）', 'error');
+  } catch (e: any) {
+    st.toast(e?.name === 'NotAllowedError' ? '瀏覽器拒絕讀取剪貼簿，請改按 Ctrl+V 貼上' : `貼上失敗：${e.message || e}`, 'error');
+  }
+}
+
+/** 貼上圖片：有開啟文件時放到目前頁面，否則以該圖片建立新 PDF */
+export async function pasteImageBlob(blob: Blob) {
+  const st = useStore.getState();
+  try {
+    if (st.pages.length) return await placeImageOnCurrentPage(blob);
+    const file = new File([blob], '剪貼簿圖片.png', { type: blob.type || 'image/png' });
+    await openFiles([file]);
+  } catch (e: any) {
+    st.toast(`貼上失敗：${e.message || e}`, 'error');
+  }
+}
+
 export function pickFiles(accept: string, multiple = false): Promise<File[]> {
   return new Promise((res) => {
     const input = document.createElement('input');

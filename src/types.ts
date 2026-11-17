@@ -103,7 +103,8 @@ export type Tool =
   | 'line'
   | 'ink'
   | 'whiteout'
-  | 'eraser';
+  | 'eraser'
+  | 'snapshot';
 
 export interface ToolStyle {
   color: string; // 文字/線條顏色

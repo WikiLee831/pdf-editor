@@ -1,11 +1,12 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Copy, Download, Move, Replace, Trash2 } from 'lucide-react';
+import { Copy, Download, ImagePlus, Move, Replace, Trash2, X } from 'lucide-react';
 import { displaySize, getPdfPage, pdfjs, renderPageToCanvas, totalRotation } from '../lib/pdfjs';
 import { eraseAt, hitImages } from '../lib/eraser';
 import { cropRegion, detectImages, getTextRuns, ocrLinesToRuns, sampleColors } from '../lib/analyze';
 import { BASELINE_RATIO, isWinAnsi } from '../lib/fonts';
 import { downloadBlob, normalizeImage, pickFiles } from '../lib/files';
 import { uid, useStore } from '../store';
+import { blobToDataUrl, snapshotRegion, type Rect } from '../lib/snapshot';
 import ObjectView, { CoverView, type DragMode } from './ObjectView';
 import TextEditor from './TextEditor';
 import type { DetectedImage, FontKey, PageRef, PdfObj, TextObj, TextRun } from '../types';
@@ -131,6 +132,8 @@ function Overlay({ pageRef, scale: s, W, H, R, pageDiv }: OverlayProps) {
   const [editing, setEditing] = useState<{ obj: TextObj; existingId?: string } | null>(null);
   const [selImage, setSelImage] = useState<string | null>(null);
   const [eraserPos, setEraserPos] = useState<{ x: number; y: number } | null>(null);
+  const [snap, setSnap] = useState<Rect | null>(null);
+  const [snapBusy, setSnapBusy] = useState(false);
   const erasing = useRef<{ pushed: boolean; last: { x: number; y: number } } | null>(null);
 
   const w = pageRef.width * s;
@@ -155,6 +158,7 @@ function Overlay({ pageRef, scale: s, W, H, R, pageDiv }: OverlayProps) {
   }, [tool, pageRef.srcId, pageRef.srcIndex]);
   useEffect(() => {
     if (tool !== 'editImage') setSelImage(null);
+    if (tool !== 'snapshot') setSnap(null);
     if (tool !== 'editText' && tool !== 'addText' && editing) setEditing(null);
   }, [tool]);
 
@@ -338,7 +342,8 @@ function Overlay({ pageRef, scale: s, W, H, R, pageDiv }: OverlayProps) {
       st().set({ pendingImage: null, tool: 'select' });
       return;
     }
-    if (['highlight', 'rect', 'ellipse', 'whiteout', 'line', 'ink'].includes(tool)) {
+    if (tool === 'snapshot') setSnap(null);
+    if (['highlight', 'rect', 'ellipse', 'whiteout', 'line', 'ink', 'snapshot'].includes(tool)) {
       e.preventDefault();
       (e.target as Element).setPointerCapture?.(e.pointerId);
       const d: Draft = tool === 'ink' ? { kind: 'ink', points: [[p.x, p.y]] } : tool === 'line' ? { kind: 'line', x0: p.x, y0: p.y, x1: p.x, y1: p.y } : { kind: 'rect', x0: p.x, y0: p.y, x1: p.x, y1: p.y };
@@ -384,9 +389,49 @@ function Overlay({ pageRef, scale: s, W, H, R, pageDiv }: OverlayProps) {
     const rw = Math.abs(d.x1 - d.x0);
     const rh = Math.abs(d.y1 - d.y0);
     if (rw < 2 || rh < 2) return;
+    if (tool === 'snapshot') {
+      const r = { x, y, w: rw, h: rh };
+      setSnap(r);
+      snapAction(r, 'copy');
+      return;
+    }
     if (tool === 'highlight') st().addObject(pageId, { id, type: 'highlight', x, y, w: rw, h: rh, fill: style.highlightColor, opacity: 0.45 }, false);
     else if (tool === 'whiteout') st().addObject(pageId, { id, type: 'whiteout', x, y, w: rw, h: rh, fill: '#ffffff' }, false);
     else st().addObject(pageId, { id, type: tool as 'rect' | 'ellipse', x, y, w: rw, h: rh, stroke: style.color, fill: style.fill, strokeWidth: style.strokeWidth, opacity: style.opacity });
+  };
+
+  // ---- 快照 ----
+  const snapAction = async (r: Rect, action: 'copy' | 'download' | 'paste') => {
+    const make = () => snapshotRegion(pageRef, r, R, 3);
+    const pageNo = st().pages.findIndex((p) => p.id === pageId) + 1;
+    setSnapBusy(true);
+    try {
+      if (action === 'copy') {
+        // 以 Promise 形式交給剪貼簿，確保在使用者操作的有效期間內寫入
+        const blob = make();
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+        st().toast('已將選取區域複製到剪貼簿，可在其他程式或本頁按 Ctrl+V 貼上', 'success');
+      } else if (action === 'download') {
+        downloadBlob(await make(), `快照_第${pageNo}頁.png`);
+      } else {
+        const src = await blobToDataUrl(await make());
+        const sideways = R % 180 !== 0;
+        const w = sideways ? r.h : r.w;
+        const h = sideways ? r.w : r.h;
+        const cx = r.x + r.w / 2 + 12;
+        const cy = r.y + r.h / 2 + 12;
+        const id = uid();
+        st().addObject(pageId, { id, type: 'image', x: cx - w / 2, y: cy - h / 2, w, h, src, rot: counterRot || undefined });
+        st().setTool('select');
+        st().select({ pageId, id });
+        st().toast('已貼上快照圖片，可拖曳到其他位置', 'success');
+      }
+    } catch (e: any) {
+      if (action === 'copy') st().toast(`無法寫入剪貼簿（${e?.message || e}），請改用「下載 PNG」`, 'error');
+      else st().toast(`快照失敗：${e?.message || e}`, 'error');
+    } finally {
+      setSnapBusy(false);
+    }
   };
 
   // ---- 編輯既有文字 ----
@@ -474,7 +519,7 @@ function Overlay({ pageRef, scale: s, W, H, R, pageDiv }: OverlayProps) {
   const interactive = tool === 'select' || tool === 'editText' || tool === 'addText';
   const cls = ['overlay', `tool-${tool}`];
   if (tool === 'select') cls.push('passive');
-  else if (['highlight', 'rect', 'ellipse', 'whiteout', 'line', 'ink', 'placeImage'].includes(tool)) cls.push('crosshair');
+  else if (['highlight', 'rect', 'ellipse', 'whiteout', 'line', 'ink', 'placeImage', 'snapshot'].includes(tool)) cls.push('crosshair');
   else if (tool === 'addText') cls.push('texting');
   else if (tool === 'eraser') cls.push('erasing');
   if (tool === 'hand') cls.push('passive');
@@ -588,6 +633,31 @@ function Overlay({ pageRef, scale: s, W, H, R, pageDiv }: OverlayProps) {
       {tool === 'eraser' && images.filter((i) => !usedImages.has(i.id)).map((i) => (
         <div key={'e' + i.id} className="img-box erasable" style={{ left: i.x * s, top: i.y * s, width: i.w * s, height: i.h * s }} />
       ))}
+
+      {/* 快照選取區 */}
+      {tool === 'snapshot' && snap && !draft && (
+        <>
+          <div className="snap-box" style={{ left: snap.x * s, top: snap.y * s, width: snap.w * s, height: snap.h * s }} />
+          <div
+            className="img-actions"
+            style={{ left: snap.x * s, top: snap.y * s + snap.h * s + 6 > h - 36 ? Math.max(0, snap.y * s - 40) : snap.y * s + snap.h * s + 6, transform: R ? `rotate(${-R}deg)` : undefined, transformOrigin: '0 0' }}
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            <button className="btn" disabled={snapBusy} onClick={() => snapAction(snap, 'copy')}>
+              <Copy size={14} /> 複製
+            </button>
+            <button className="btn" disabled={snapBusy} onClick={() => snapAction(snap, 'download')}>
+              <Download size={14} /> 下載 PNG
+            </button>
+            <button className="btn" disabled={snapBusy} onClick={() => snapAction(snap, 'paste')}>
+              <ImagePlus size={14} /> 貼為圖片
+            </button>
+            <button className="btn icon" title="取消選取" onClick={() => setSnap(null)}>
+              <X size={14} />
+            </button>
+          </div>
+        </>
+      )}
 
       {/* 繪製中 */}
       {draft?.kind === 'rect' && (
