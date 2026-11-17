@@ -81,6 +81,7 @@ function fitPage() {
 }
 
 const TABS = [
+  { icon: FilePlus2, label: '建立 PDF', dialog: 'create' },
   { icon: TextCursorInput, label: '編輯文字', run: () => useStore.getState().setTool('editText') },
   { icon: Images, label: '編輯圖片', run: () => useStore.getState().setTool('editImage') },
   { icon: ScanText, label: 'OCR 文字辨識', dialog: 'ocr' },
@@ -90,7 +91,6 @@ const TABS = [
   { icon: FileOutput, label: '轉換 / 匯出', dialog: 'convert' },
   { icon: Stamp, label: '浮水印', dialog: 'watermark' },
   { icon: Hash, label: '頁碼', dialog: 'pagenum' },
-  { icon: FilePlus2, label: '建立 PDF', dialog: 'create' },
 ] as const;
 
 export default function App() {
