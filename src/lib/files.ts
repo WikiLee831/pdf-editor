@@ -45,28 +45,59 @@ export function blankPage(width = 595.28, height = 841.89): PageRef {
   return { id: uid(), srcId: null, srcIndex: 0, width, height, view: [0, 0, width, height], baseRotate: 0, rotate: 0 };
 }
 
-/** 開啟檔案（PDF 或圖片） */
-export async function openFiles(files: File[]) {
+/** 開啟檔案：每個 PDF 各開一個分頁；多張圖片合成一個分頁。回傳成功開啟的分頁數 */
+export async function openFiles(files: File[]): Promise<number> {
   const st = useStore.getState();
-  if (!files.length) return;
+  if (!files.length) return 0;
   st.setBusy({ message: '開啟檔案中…' });
+  let opened = 0;
   try {
     const pdfFiles = files.filter((f) => /\.pdf$/i.test(f.name) || f.type === 'application/pdf');
     const imgFiles = files.filter((f) => f.type.startsWith('image/'));
-    let pages: PageRef[] = [];
-    for (const f of pdfFiles) pages.push(...(await registerPdf(await readFile(f), f.name)));
+    if (!pdfFiles.length && !imgFiles.length) throw new Error('不支援的檔案格式');
+    for (const f of pdfFiles) {
+      try {
+        const pages = await registerPdf(await readFile(f), f.name);
+        st.loadDocument(f.name, pages);
+        opened++;
+      } catch (e: any) {
+        if (e?.message !== '已取消') st.toast(`無法開啟「${f.name}」：${friendlyError(e)}`, 'error');
+      }
+    }
     if (imgFiles.length) {
       const bytes = await imagesToPdf(imgFiles, 'fit');
-      pages.push(...(await registerPdf(bytes, '圖片.pdf')));
+      const name = imgFiles.length === 1 ? imgFiles[0].name.replace(/\.[^.]+$/, '.pdf') : '圖片.pdf';
+      st.loadDocument(name, await registerPdf(bytes, name));
+      opened++;
     }
-    if (!pages.length) throw new Error('不支援的檔案格式');
-    const name = pdfFiles.length === 1 && !imgFiles.length ? pdfFiles[0].name : files.length === 1 ? files[0].name.replace(/\.[^.]+$/, '.pdf') : '合併文件.pdf';
-    st.loadDocument(name, pages);
-    fileHandle = null;
   } catch (e: any) {
     st.toast(`開啟失敗：${friendlyError(e)}`, 'error');
   } finally {
     st.setBusy(null);
+  }
+  return opened;
+}
+
+/** 關閉分頁（有未儲存變更時先確認），並釋放不再使用的 PDF 來源 */
+export function closeDoc(id?: string) {
+  const st = useStore.getState();
+  const target = id || st.activeDoc;
+  const doc = st.docStates().find((d) => d.id === target);
+  if (!doc) return;
+  if (doc.state.dirty && !confirm(`「${doc.state.docName}」有未儲存的變更，確定要關閉嗎？`)) return;
+  st.closeDocument(doc.id);
+  const used = new Set<string>();
+  for (const d of useStore.getState().docStates()) {
+    for (const snap of [d.state, ...d.state.past, ...d.state.future]) for (const p of snap.pages) if (p.srcId) used.add(p.srcId);
+  }
+  for (const [sid, src] of sources) {
+    if (used.has(sid)) continue;
+    sources.delete(sid);
+    try {
+      src.pdf.destroy();
+    } catch {
+      /* ignore */
+    }
   }
 }
 
@@ -81,9 +112,9 @@ export function friendlyError(e: any): string {
 
 // ---------- 儲存 ----------
 
-let fileHandle: any = null;
+/** 目前分頁對應的檔案代碼（可直接覆寫原檔） */
 export function setFileHandle(h: any) {
-  fileHandle = h;
+  useStore.getState().set({ fileHandle: h });
 }
 
 export async function currentPdfBytes(onProgress?: (p: number) => void) {
@@ -127,6 +158,7 @@ export async function savePdf(saveAs = false) {
   try {
     const bytes = await currentPdfBytes((p) => st.setBusy({ message: '產生 PDF 中…', progress: p }));
     const blob = new Blob([bytes as BlobPart], { type: 'application/pdf' });
+    const fileHandle = st.fileHandle;
     if (fileHandle && !saveAs) {
       const ws = await fileHandle.createWritable();
       await ws.write(blob);
@@ -135,8 +167,7 @@ export async function savePdf(saveAs = false) {
       const h = await saveBlobAs(blob, st.docName || '文件.pdf', [{ description: 'PDF 文件', accept: { 'application/pdf': ['.pdf'] } }]);
       if (!h) return;
       if (h !== 'download') {
-        fileHandle = h;
-        st.set({ docName: h.name });
+        st.set({ fileHandle: h, docName: h.name });
       }
     }
     st.set({ dirty: false });

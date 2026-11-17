@@ -1,9 +1,12 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useStore } from '../store';
 import PageView from './PageView';
 import OcrPanel from './OcrPanel';
 
-export default function Viewer() {
+/** 各分頁的捲動位置，切換分頁時還原 */
+const savedScroll = new Map<string, { top: number; left: number }>();
+
+export default function Viewer({ docId }: { docId: string }) {
   const pages = useStore((s) => s.pages);
   const scale = useStore((s) => s.scale);
   const tool = useStore((s) => s.tool);
@@ -11,6 +14,14 @@ export default function Viewer() {
   const ref = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState<Set<string>>(new Set());
   const [grabbing, setGrabbing] = useState(false);
+
+  useLayoutEffect(() => {
+    const pos = savedScroll.get(docId);
+    if (pos && ref.current) {
+      ref.current.scrollTop = pos.top;
+      ref.current.scrollLeft = pos.left;
+    }
+  }, []);
 
   // 可見頁面（延遲渲染）
   useEffect(() => {
@@ -38,6 +49,7 @@ export default function Viewer() {
     const root = ref.current!;
     let raf = 0;
     const onScroll = () => {
+      savedScroll.set(docId, { top: root.scrollTop, left: root.scrollLeft });
       cancelAnimationFrame(raf);
       raf = requestAnimationFrame(() => {
         const mid = root.getBoundingClientRect().top + root.clientHeight / 3;

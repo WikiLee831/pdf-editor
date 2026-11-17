@@ -16,7 +16,6 @@ import {
   Scissors,
   Stamp,
   Undo2,
-  X,
   ZoomIn,
   ZoomOut,
   TextCursorInput,
@@ -26,9 +25,10 @@ import {
 } from 'lucide-react';
 import { useStore } from './store';
 import { openFiles, pasteImageBlob, pasteImageFromClipboard, pickFiles, savePdf, setFileHandle } from './lib/files';
-import { clearRasterCache, displaySize } from './lib/pdfjs';
+import { displaySize } from './lib/pdfjs';
 import Viewer from './components/Viewer';
 import ThumbPanel from './components/ThumbPanel';
+import DocTabs from './components/DocTabs';
 import ToolRail, { TOOL_ITEMS } from './components/ToolRail';
 import PropsPanel from './components/PropsPanel';
 import OcrDialog from './components/dialogs/OcrDialog';
@@ -46,10 +46,13 @@ async function openFlow() {
   const w = window as any;
   if (w.showOpenFilePicker) {
     try {
-      const [h] = await w.showOpenFilePicker({ types: [{ description: 'PDF 或圖片', accept: { 'application/pdf': ['.pdf'], 'image/*': ['.png', '.jpg', '.jpeg', '.webp', '.bmp', '.gif'] } }] });
-      const f = await h.getFile();
-      await openFiles([f]);
-      if (/\.pdf$/i.test(f.name)) setFileHandle(h);
+      const handles = await w.showOpenFilePicker({ multiple: true, types: [{ description: 'PDF 或圖片', accept: { 'application/pdf': ['.pdf'], 'image/*': ['.png', '.jpg', '.jpeg', '.webp', '.bmp', '.gif'] } }] });
+      const files: File[] = await Promise.all(handles.map((h: any) => h.getFile()));
+      const pdfs = files.map((f, i) => [f, handles[i]] as const).filter(([f]) => /\.pdf$/i.test(f.name));
+      // PDF 逐一開啟成分頁，並記住各自的檔案代碼（儲存時可直接覆寫原檔）
+      for (const [f, h] of pdfs) if (await openFiles([f])) setFileHandle(h);
+      const imgs = files.filter((f) => !/\.pdf$/i.test(f.name));
+      if (imgs.length) await openFiles(imgs);
       return;
     } catch (e: any) {
       if (e?.name === 'AbortError') return;
@@ -104,6 +107,7 @@ export default function App() {
   const showThumbs = useStore((s) => s.showThumbs);
   const showProps = useStore((s) => s.showProps);
   const tool = useStore((s) => s.tool);
+  const activeDoc = useStore((s) => s.activeDoc);
   const st = useStore.getState;
   const hasDoc = pages.length > 0;
   const [over, setOver] = useState(false);
@@ -186,7 +190,7 @@ export default function App() {
   // 離開前提醒
   useEffect(() => {
     const h = (e: BeforeUnloadEvent) => {
-      if (st().dirty) {
+      if (st().docStates().some((d) => d.state.dirty)) {
         e.preventDefault();
         e.returnValue = '';
       }
@@ -225,15 +229,8 @@ export default function App() {
       st().toast('在頁面上點一下以放置圖片');
       return;
     }
-    if (hasDoc && dirty && !confirm('目前文件有未儲存的變更，確定要開啟新檔案嗎？')) return;
-    clearRasterCache();
+    // 其他檔案各自開成新分頁
     await openFiles(files);
-  };
-
-  const closeDoc = () => {
-    if (dirty && !confirm('目前文件有未儲存的變更，確定要關閉嗎？')) return;
-    st().closeDocument();
-    setFileHandle(null);
   };
 
   return (
@@ -268,17 +265,6 @@ export default function App() {
         <button className="btn icon" onClick={pasteImageFromClipboard} title="從剪貼簿貼上圖片（Ctrl+V）">
           <ClipboardPaste size={17} />
         </button>
-        {hasDoc && (
-          <>
-            <span className="doc-title" title={docName || ''}>
-              {dirty ? '● ' : ''}
-              {docName}
-            </span>
-            <button className="btn icon" onClick={closeDoc} title="關閉文件">
-              <X size={16} />
-            </button>
-          </>
-        )}
         <div className="spacer" />
         {hasDoc && (
           <>
@@ -338,6 +324,8 @@ export default function App() {
         )}
       </header>
 
+      {hasDoc && <DocTabs onOpen={openFlow} />}
+
       {hasDoc && (
         <nav className="tabs">
           {TABS.map((t) => (
@@ -356,8 +344,8 @@ export default function App() {
       {hasDoc ? (
         <div className="main">
           <ToolRail />
-          {showThumbs && <ThumbPanel />}
-          <Viewer />
+          {showThumbs && <ThumbPanel key={`thumbs-${activeDoc}`} />}
+          <Viewer key={`viewer-${activeDoc}`} docId={activeDoc!} />
           {showProps && <PropsPanel />}
         </div>
       ) : (

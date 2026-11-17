@@ -34,7 +34,19 @@ interface Toast {
   kind: 'info' | 'error' | 'success';
 }
 
+/** 每個分頁（文件）各自保存的狀態 */
+const DOC_KEYS = ['docName', 'dirty', 'pages', 'objects', 'ocr', 'past', 'future', 'selected', 'currentPage', 'scale', 'ocrPanel', 'fileHandle'] as const;
+type DocKey = (typeof DOC_KEYS)[number];
+export type DocState = Pick<State, DocKey>;
+export interface DocTab {
+  id: string;
+  state: DocState;
+}
+
 interface State extends Snapshot {
+  docs: DocTab[]; // 所有分頁；目前分頁的即時狀態放在最上層欄位
+  activeDoc: string | null;
+  fileHandle: any; // File System Access API 檔案代碼（可直接覆寫儲存）
   docName: string | null;
   dirty: boolean;
   past: Snapshot[];
@@ -56,7 +68,10 @@ interface State extends Snapshot {
 
   // 文件
   loadDocument: (name: string, pages: PageRef[]) => void;
-  closeDocument: () => void;
+  closeDocument: (id?: string) => void;
+  switchDoc: (id: string) => void;
+  /** 取得所有分頁目前的狀態（目前分頁用即時資料） */
+  docStates: () => { id: string; state: DocState }[];
   pushHistory: () => void;
   undo: () => void;
   redo: () => void;
@@ -88,7 +103,26 @@ interface State extends Snapshot {
 
 const snap = (s: Snapshot): Snapshot => ({ pages: s.pages, objects: s.objects, ocr: s.ocr });
 
+const pickDoc = (s: State): DocState => Object.fromEntries(DOC_KEYS.map((k) => [k, s[k]])) as DocState;
+const blankDoc = (scale: number): DocState => ({
+  docName: null,
+  dirty: false,
+  pages: [],
+  objects: {},
+  ocr: {},
+  past: [],
+  future: [],
+  selected: null,
+  currentPage: 0,
+  scale,
+  ocrPanel: null,
+  fileHandle: null,
+});
+
 export const useStore = create<State>((set, get) => ({
+  docs: [],
+  activeDoc: null,
+  fileHandle: null,
   docName: null,
   dirty: false,
   pages: [],
@@ -121,21 +155,44 @@ export const useStore = create<State>((set, get) => ({
   ocrPanel: null,
 
   loadDocument: (name, pages) =>
-    set({
-      docName: name,
-      pages,
-      objects: {},
-      ocr: {},
-      past: [],
-      future: [],
-      selected: null,
-      currentPage: 0,
-      dirty: false,
-      tool: 'select',
-      scrollToPage: { index: 0, nonce: Date.now() },
+    set((s) => {
+      // 目前分頁是空的就直接使用，否則開新分頁
+      const reuse = s.activeDoc && !s.pages.length;
+      const docs = s.docs.map((d) => (d.id === s.activeDoc ? { ...d, state: pickDoc(s) } : d));
+      const id = reuse ? s.activeDoc! : uid();
+      const state: DocState = { ...blankDoc(s.scale), docName: name, pages };
+      return {
+        ...state,
+        docs: reuse ? docs.map((d) => (d.id === id ? { id, state } : d)) : [...docs, { id, state }],
+        activeDoc: id,
+        tool: 'select',
+        pendingImage: null,
+        scrollToPage: { index: 0, nonce: Date.now() },
+      };
     }),
-  closeDocument: () =>
-    set({ docName: null, pages: [], objects: {}, ocr: {}, past: [], future: [], selected: null, dirty: false }),
+  closeDocument: (id) =>
+    set((s) => {
+      const target = id || s.activeDoc;
+      const idx = s.docs.findIndex((d) => d.id === target);
+      if (idx < 0) return {};
+      const docs = s.docs.filter((d) => d.id !== target);
+      if (target !== s.activeDoc) return { docs };
+      const next = docs[Math.min(idx, docs.length - 1)];
+      if (!next) return { ...blankDoc(s.scale), docs, activeDoc: null, tool: 'select', pendingImage: null };
+      return { ...next.state, docs, activeDoc: next.id, tool: 'select', pendingImage: null, scrollToPage: null };
+    }),
+  switchDoc: (id) =>
+    set((s) => {
+      if (id === s.activeDoc) return {};
+      const target = s.docs.find((d) => d.id === id);
+      if (!target) return {};
+      const docs = s.docs.map((d) => (d.id === s.activeDoc ? { ...d, state: pickDoc(s) } : d));
+      return { ...target.state, docs, activeDoc: id, tool: 'select', pendingImage: null, scrollToPage: null };
+    }),
+  docStates: () => {
+    const s = get();
+    return s.docs.map((d) => ({ id: d.id, state: d.id === s.activeDoc ? pickDoc(s) : d.state }));
+  },
 
   pushHistory: () =>
     set((s) => ({ past: [...s.past.slice(-80), snap(s)], future: [], dirty: true })),

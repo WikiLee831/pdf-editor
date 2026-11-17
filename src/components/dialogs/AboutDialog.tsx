@@ -9,6 +9,9 @@ export default function AboutDialog() {
         </p>
         <ul style={{ paddingLeft: 18, lineHeight: 1.9 }}>
           <li>
+            <b>多文件分頁</b>：可同時開啟多個 PDF，在上方分頁列切換；每個分頁各自保留編輯與復原紀錄。
+          </li>
+          <li>
             <b>編輯文字</b>：點選左側「編輯既有文字」，頁面上的文字會以虛線框標示，點一下即可修改；自動取樣原文字的顏色與背景。
           </li>
           <li>
